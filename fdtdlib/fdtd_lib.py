@@ -143,6 +143,8 @@ class Fdtd(object):
     self.x_margin = 0.8E-6
     self.y_margin = 0.8E-6
     
+    self.source_index = 0
+    
     self.fdtd.importmaterialdb("D:\\TallesArquivos\\Documents\\FotonicaArquivos\\raman\\fdtdlib\\material.mdf");
   
   def get_type(self, simbol: str, rindex: int, cindex: int):
@@ -190,6 +192,8 @@ class Fdtd(object):
     matrix = crystal.generate_matrix()
     script = 'deleteall; \n\n'
     
+    self.source_index = 0
+    
     for rindex, row in enumerate(matrix):
       for cindex, simbol in enumerate(row):
         type = self.get_type(simbol, rindex, cindex)
@@ -228,9 +232,16 @@ class Fdtd(object):
             (0,-r)
           ]
           
-          print(matrix[rindex+1][cindex-1], matrix[rindex+1][cindex-0], matrix[rindex+1][cindex+1])
-          print(matrix[rindex-0][cindex-1], matrix[rindex-0][cindex-0], matrix[rindex-0][cindex+1])
-          print(matrix[rindex-1][cindex-1], matrix[rindex-1][cindex-0], matrix[rindex-1][cindex+1])
+          circle_script = 'addcircle; \n\n'
+          circle_type = self.get_type('2', rindex, cindex)
+          circle_script += 'set("radius", {}); \n'.format(a * circle_type['radius'])
+          
+          circle_script += 'set("z", {}); \n'.format(0)
+          circle_script += 'set("z span", {}); \n'.format(crystal.zspan)
+          circle_script += 'set("material", "{}"); \n'.format('etch')
+          
+          x_desv = np.cos(np.deg2rad(-60))*a*1/3
+          y_desv = np.sin(np.deg2rad(-60))*a*1/3
           
           if matrix[rindex+1][cindex-1] == '.' and matrix[rindex+1][cindex-0] == '.':
             # print("curva de 60° para 0° com ponto interno a curva")
@@ -239,14 +250,18 @@ class Fdtd(object):
           elif matrix[rindex+1][cindex-0] == '.' and matrix[rindex+1][cindex+1] == '.':
             # print("curva de -60° para 0° com ponto externo a curva")
             vtx = [(-x[0] + 2*a, x[1]) for x in vtx]
+            x_desv *= -1
             
           elif matrix[rindex-1][cindex-1] == '.' and matrix[rindex-1][cindex-0] == '.':
             # print("curva de -60° para 0° com ponto interno a curva")
             vtx = [(-x[0] + 1.5*a, x[1] - h) for x in vtx]
+            y_desv *= -1
             
           elif matrix[rindex-1][cindex-0] == '.' and matrix[rindex-1][cindex+1] == '.':
             # print("curva de 60° para 0° com ponto externo a curva")
             vtx = [(-x[0] + 2*a, -x[1]) for x in vtx]
+            x_desv *= -1
+            y_desv *= -1
             
             
           elif matrix[rindex+1][cindex-1] == '.':
@@ -256,17 +271,26 @@ class Fdtd(object):
           elif matrix[rindex+1][cindex+1] == '.':
             # print("curva para -60° com ponto interno a curva")
             vtx = [(x[0] - 1.5*a, -x[1] + h) for x in vtx]
+            x_desv *= -1
             
           elif matrix[rindex-1][cindex-1] == '.':
             # print("curva para -60° com ponto externo a curva")
             vtx = [(x[0] - 2*a, -x[1]) for x in vtx]
+            y_desv *= -1
             
           elif matrix[rindex-1][cindex+1] == '.':
             # print("curva para 60° com ponto interno a curva")
             vtx = [(x[0] - 1.5*a, x[1] - h) for x in vtx]
+            x_desv *= -1
+            y_desv *= -1
             
-          print()
-            
+          if not (rindex % 2 == 1) == crystal.first_null: # odd
+            circle_script += 'set("x", {}); \n'.format(cindex*a + a/2 + x_desv)
+          else: # even
+            circle_script += 'set("x", {}); \n'.format(cindex*a + x_desv)
+          
+          circle_script += 'set("y", {}); \n'.format(rindex*h + y_desv)  
+          
           vertices = '['
           for i, point in enumerate(vtx):
             if i != 0:
@@ -284,19 +308,23 @@ class Fdtd(object):
           script += 'set("vertices", {});'.format(vertices)
           script += 'set("z span", {}); \n'.format(crystal.zspan)
           script += 'set("material", "{}"); \n'.format('etch')
+          
+          script += circle_script
+          
           script += '\n'
         
         elif type['type'] == 'source':
-          self.fdtd.select('source')
+          self.source_index += 1
+          self.fdtd.select(f'source_{self.source_index}')
           self.fdtd.delete()
           
-          props = OrderedDict([("name", "source"), 
-                               ("amplitude", 1),
+          props = OrderedDict([("name", f'source_{self.source_index}'), 
+                               ("amplitude", 2),
                                ('injection axis', 'x-axis'),
                                ('mode selection', 'fundamental TE mode'),
                                ("override global source settings", True),
-                               ("wavelength start", 1549e-9),
-                               ("wavelength stop", 1551e-9),
+                               ("wavelength start", 1550e-9),
+                               ("wavelength stop", 1550e-9),
                                ('number of trial modes', 20)
                                ])
           source = self.fdtd.addmode(properties=props)

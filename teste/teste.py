@@ -21,5 +21,5 @@ f.add_fdtd()
 f.add_movie()
 
 #%%
-f.fdtd.save("fdtd_file.fsp")
-f.fdtd.run()
+# f.fdtd.save("fdtd_file.fsp")
+# f.fdtd.run()
