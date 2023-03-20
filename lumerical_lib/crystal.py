@@ -243,6 +243,71 @@ class Crystal(object):
 
                     script += circle_script
                     script += '\n'
+                elif type['type'] == 'junction':
+                    script += 'addpoly; \n'
+                    r = a * type['radius']
+                    vtx = [
+                        (np.cos(np.deg2rad(30))*r, np.sin(np.deg2rad(30))*r),
+                        (0.5*a + np.cos(np.deg2rad(30)) *
+                            r, -h + np.sin(np.deg2rad(30))*r),
+                        (2*a + np.cos(np.deg2rad(60))*r, -
+                            2*h + np.sin(np.deg2rad(60))*r),
+                        (2*a + np.cos(np.deg2rad(240))*r, -
+                            2*h + np.sin(np.deg2rad(240))*r),
+                        (0.5*a + np.cos(np.deg2rad(240)) *
+                            r, -h + np.sin(np.deg2rad(240))*r),
+                        (0.5*a + np.cos(np.deg2rad(210)) *
+                            r, -h + np.sin(np.deg2rad(210))*r),
+                        (np.cos(np.deg2rad(210))*r, np.sin(np.deg2rad(210))*r)
+                    ]
+
+                    circle_script = 'addcircle; \n\n'
+                    circle_type = types['2']
+                    circle_script += 'set("radius", {}); \n'.format(a *
+                                                                    circle_type['radius'])
+                    circle_script += 'set("z", {}); \n'.format(0)
+                    circle_script += 'set("z span", {}); \n'.format(self.zspan)
+                    circle_script += 'set("material", "{}"); \n'.format('etch')
+
+                    x_desv = np.cos(np.deg2rad(60))*a*1/3
+                    y_desv = np.sin(np.deg2rad(60))*a*1/3
+
+                    vtx = [(x[0] - 1.5*a, x[1] + h) for x in vtx]
+
+                    if matrix[rindex+1][cindex-1] == '1':
+                        pass
+                    elif matrix[rindex-1][cindex-1] == '1':
+                        vtx = [(x[0], -x[1]) for x in vtx]
+                        y_desv *= -1
+
+                    if not (rindex % 2 == 1) == self.first_null:  # odd
+                        circle_script += 'set("x", {}); \n'.format(cindex *
+                                                                   a + a/2 + x_desv)
+                    else:  # even
+                        circle_script += 'set("x", {}); \n'.format(cindex*a + x_desv)
+                    circle_script += 'set("y", {}); \n'.format(rindex*h + y_desv)
+
+                    vertices = '['
+                    for i, point in enumerate(vtx):
+                        if i != 0:
+                            vertices += ';'
+                        vertices += f'{point[0]},{point[1]}'
+                    vertices += ']'
+
+                    if not (rindex % 2 == 1) == self.first_null:  # odd
+                        script += 'set("x", {}); \n'.format(cindex*a + a/2)
+                    else:  # even
+                        script += 'set("x", {}); \n'.format(cindex*a)
+
+                    script += 'set("y", {}); \n'.format(rindex*h)
+
+                    script += 'set("vertices", {});'.format(vertices)
+                    script += 'set("z span", {}); \n'.format(self.zspan)
+                    script += 'set("material", "{}"); \n'.format('etch')
+
+                    script += circle_script
+
+                    script += '\n'
                 else:
                     continue
         return script
