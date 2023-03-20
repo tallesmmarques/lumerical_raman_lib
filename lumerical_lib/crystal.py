@@ -26,6 +26,7 @@ class Crystal(object):
         self.first_null = False
         self.a = a
         self.zspan = zspan
+        self.x_init = 0
 
         if os.path.exists(f'{self.name}_crystal_model.txt'):
             self.read_crystal_file()

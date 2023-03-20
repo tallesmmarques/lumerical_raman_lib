@@ -43,7 +43,7 @@ class Fdtd(object):
         else:
             self.fdtd = lumapi.FDTD()
 
-        self.structures = {'crystals': {}, 'sources': {}}
+        self.structures = {'crystals': {}, 'sources': {}, 'monitors': {}}
         self.width = 0
         self.height = 0
         self.a = 0.426E-6
@@ -52,6 +52,7 @@ class Fdtd(object):
         self.y_margin = 0.8E-6
 
         self.source_index = 0
+        self.monitor_index = 0
         self.last_crystal_x = 0
 
         self.fdtd.importmaterialdb('..\\lumerical_lib\\material.mdf')
@@ -68,6 +69,7 @@ class Fdtd(object):
         pc.y = 0
         pc.z = 0
 
+        crystal.x_init = self.last_crystal_x
         self.structures['crystals'][crystal.name] = {
             'f': pc, 'crystal': crystal}
         self.last_crystal_x += crystal.x * crystal.a
@@ -121,6 +123,44 @@ class Fdtd(object):
                     self.structures['sources'][f'source_{self.source_index}'] = {
                         'f': source}
 
+    def add_monitors(self):
+        crystal = self.structures['crystals'][
+            list(self.structures['crystals'].keys())[-1]
+        ]['crystal']
+        a = crystal.a
+        h = a*np.sqrt(3)/2
+        r = types['1']['radius']*a
+        self.monitor_index = 0
+
+        matrix = crystal.generate_matrix()
+
+        for rindex, row in enumerate(matrix):
+            for cindex, simbol in enumerate(row):
+                if simbol not in types.keys():
+                    continue
+                type = types[simbol]
+
+                if type['type'] == 'monitor':
+                    self.monitor_index += 1
+                    self.fdtd.select(f'monitor_{self.source_index}')
+                    self.fdtd.delete()
+
+                    props = OrderedDict([('name', f'monitor_{self.monitor_index}'),
+                                         ('monitor type', 3),
+                                         ('override global monitor settings', True),
+                                         ('frequency points', 300),
+                                         ('use source limits', True)
+                                         ])
+                    monitor = self.fdtd.addpower(properties=props)
+                    monitor.x = crystal.x_init + cindex*a + a / \
+                        2 if not (rindex %
+                                  2 == 1) == crystal.first_null else (cindex)*a
+                    monitor.y = rindex*h
+                    monitor.y_span = 2*h - 2*r
+
+                    self.structures['monitors'][f'monitor_{self.monitor_index}'] = {
+                        'f': monitor}
+
     def add_base(self):
         width, height = self.get_size()
 
@@ -139,6 +179,46 @@ class Fdtd(object):
         self.structures['base'] = {
             'f': rect
         }
+
+    def add_analysis(self, movie=False):
+        width, height = self.get_size()
+
+        # FDTD
+        self.fdtd.select('FDTD')
+        self.fdtd.delete()
+        fdtd = self.fdtd.addfdtd(dimension="2D", x=width/2, y=height/2,
+                                 x_span=width + 2*self.x_margin,
+                                 y_span=height + 2*self.y_margin)
+        self.structures['fdtd'] = {'f': fdtd}
+
+        # Field Monitor
+        self.fdtd.select('field_monitor')
+        self.fdtd.delete()
+        fm = self.fdtd.addprofile(name="field_monitor", x=width/2, y=height/2,
+                                  x_span=width + 2*self.x_margin,
+                                  y_span=height + 2*self.y_margin)
+        self.structures['field_monitor'] = {'f': fm}
+
+        # Dielectric Monitor
+        self.fdtd.select('dielectric_monitor')
+        self.fdtd.delete()
+        dm = self.fdtd.addindex(name="dielectric_monitor", x=width/2, y=height/2,
+                                x_span=width + 2*self.x_margin,
+                                y_span=height + 2*self.y_margin)
+        self.structures['dielectric_monitor'] = {'f': dm}
+
+        # Movie
+        if movie:
+            self.fdtd.select('movie')
+            self.fdtd.delete()
+            movie = self.fdtd.addmovie(name="movie", x=width/2, y=height/2,
+                                       x_span=width + 2*self.x_margin,
+                                       y_span=height + 2*self.y_margin)
+            self.fdtd.select('movie')
+            self.fdtd.set('horizontal resolution', 720)
+            self.fdtd.set('lock aspect ratio', True)
+            self.fdtd.set('scale', 2e16)
+            self.structures['movie'] = {'f': movie}
 
     def get_size(self):
         crystal = self.structures['crystals'][next(
